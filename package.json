@@ -1,0 +1,54 @@
+{
+  "name": "@qubitquant/crypto-pay",
+  "version": "0.1.0",
+  "description": "Trustless on-chain ERC-20 (USDT/USDC) payment validation + SIWE wallet binding. No custody, no processor — verify a transfer straight from its receipt.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "tsup"
+  },
+  "keywords": [
+    "ethereum",
+    "erc20",
+    "usdt",
+    "usdc",
+    "payment",
+    "siwe",
+    "viem",
+    "web3"
+  ],
+  "peerDependencies": {
+    "viem": "^2"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5",
+    "viem": "^2.21.0",
+    "vitest": "^3.2.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
