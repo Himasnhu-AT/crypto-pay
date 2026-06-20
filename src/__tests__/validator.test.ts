@@ -51,6 +51,7 @@ const baseEval = {
   receiveAddress: RECEIVE,
   expectedAmount: PRICE,
   sender: SENDER,
+  requireSender: true,
   minConfirmations: 12,
   txHash: TX,
 } as const;
@@ -188,6 +189,37 @@ describe("evaluateReceipt", () => {
     const res = evaluateReceipt({ ...baseEval, receipt: receipt([]) });
     expect(res).toEqual({ ok: false, reason: "no_matching_transfer" });
   });
+
+  it("with requireSender:false, accepts a transfer from ANY wallet to us (manual flow)", () => {
+    const res = evaluateReceipt({
+      ...baseEval,
+      requireSender: false,
+      sender: undefined,
+      receipt: receipt([transferLog(TOKEN, STRANGER, RECEIVE, PRICE)]),
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it("with requireSender:false, still enforces token/recipient/amount/confirmations", () => {
+    // wrong recipient is still rejected even without a sender check
+    const res = evaluateReceipt({
+      ...baseEval,
+      requireSender: false,
+      sender: undefined,
+      receipt: receipt([transferLog(TOKEN, STRANGER, STRANGER, PRICE)]),
+    });
+    expect(res).toEqual({ ok: false, reason: "no_matching_transfer" });
+  });
+
+  it("requireSender:true with no sender provided rejects safely (misconfig)", () => {
+    const res = evaluateReceipt({
+      ...baseEval,
+      requireSender: true,
+      sender: undefined,
+      receipt: receipt([transferLog(TOKEN, SENDER, RECEIVE, PRICE)]),
+    });
+    expect(res).toEqual({ ok: false, reason: "no_matching_transfer" });
+  });
 });
 
 // ── createValidator: the chain-I/O wrapper ──────────────────────────────────
@@ -255,6 +287,22 @@ describe("createValidator", () => {
       txHash: TX,
       expectedAmount: PRICE,
       sender: SENDER,
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it("honors requireSender:false (manual flow — any sender, no sender supplied)", async () => {
+    const v = createValidator(
+      cfg,
+      stubReader({
+        getTransactionReceipt: async () =>
+          receipt([transferLog(TOKEN, STRANGER, RECEIVE, PRICE)]),
+      }),
+    );
+    const res = await v.validatePayment({
+      txHash: TX,
+      expectedAmount: PRICE,
+      requireSender: false,
     });
     expect(res.ok).toBe(true);
   });

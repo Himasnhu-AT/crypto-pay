@@ -37,10 +37,19 @@ type ValidateInput = {
      */
     expectedAmount: bigint;
     /**
-     * The wallet the user proved they own (via SIWE). The transfer's `from` must
-     * equal this. This is what stops someone claiming a stranger's txHash.
+     * The wallet the user proved they own (via SIWE). When `requireSender` is
+     * true (the default), the transfer's `from` must equal this — that's what
+     * stops someone claiming a stranger's txHash. Omit only with
+     * `requireSender: false`.
      */
-    sender: `0x${string}`;
+    sender?: `0x${string}`;
+    /**
+     * Whether to enforce `from === sender`. Default `true` (the connected/SIWE
+     * flow). Set `false` for a manual, human-reviewed flow where the sender
+     * isn't proven — the result then only confirms "this tx paid us >= price",
+     * and a human / single-use-txHash guard provides attribution.
+     */
+    requireSender?: boolean;
 };
 type ValidateReason = "bad_tx_hash" | "not_found" | "wrong_chain" | "reverted" | "no_matching_transfer" | "insufficient_confirmations";
 type ValidateResult = {
@@ -80,7 +89,10 @@ type EvaluateParams = {
     };
     receiveAddress: `0x${string}`;
     expectedAmount: bigint;
-    sender: `0x${string}`;
+    /** Required when `requireSender` is true; ignored otherwise. */
+    sender?: `0x${string}`;
+    /** Enforce `from === sender`. Default true at the createValidator layer. */
+    requireSender: boolean;
     minConfirmations: number;
     txHash: `0x${string}`;
 };

@@ -15,7 +15,11 @@ function evaluateReceipt(params) {
   if (receipt.status !== "success") return { ok: false, reason: "reverted" };
   const tokenAddress = getAddress(params.token.address);
   const receiveAddress = getAddress(params.receiveAddress);
-  const sender = getAddress(params.sender);
+  let expectedSender = null;
+  if (params.requireSender) {
+    if (!params.sender) return { ok: false, reason: "no_matching_transfer" };
+    expectedSender = getAddress(params.sender);
+  }
   let matched = null;
   for (const log of receipt.logs) {
     let logAddress;
@@ -49,7 +53,7 @@ function evaluateReceipt(params) {
       continue;
     }
     if (to !== receiveAddress) continue;
-    if (from !== sender) continue;
+    if (expectedSender !== null && from !== expectedSender) continue;
     if (args.value < expectedAmount) continue;
     matched = args.value;
     break;
@@ -114,6 +118,7 @@ function createValidator(cfg, reader) {
       receiveAddress: cfg.receiveAddress,
       expectedAmount: input.expectedAmount,
       sender: input.sender,
+      requireSender: input.requireSender ?? true,
       minConfirmations: cfg.minConfirmations,
       txHash: input.txHash
     });

@@ -33,6 +33,8 @@ const result = await validator.validatePayment({
   txHash: "0x…",
   expectedAmount: toSmallestUnit("49", 6), // 49 USDT
   sender: "0xWalletTheUserProvedTheyOwn",  // from SIWE — see below
+  // requireSender defaults to true; pass false for a manual, human-reviewed
+  // flow where the sender isn't proven (see "Manual payments" below).
 });
 
 if (result.ok) {
@@ -74,12 +76,37 @@ const ok = await verifySiwe({
 SIWE here is EOA-only (MetaMask). Smart-contract wallets (ERC-1271/6492) are out
 of scope.
 
+## Manual (human-reviewed) payments
+
+The connected flow above binds the payer's wallet with SIWE and passes it as
+`sender`. For a manual flow — the user pays from any wallet or exchange and just
+pastes the tx hash — there is no proven sender. Set `requireSender: false` and
+omit `sender`:
+
+```ts
+const result = await validator.validatePayment({
+  txHash: "0x…",
+  expectedAmount: toSmallestUnit("49", 6),
+  requireSender: false, // skip the from === sender check
+});
+// result.ok === true means: this tx paid us >= price, on the right token,
+// to the right address, with enough confirmations — but NOT who sent it.
+```
+
+With `requireSender: false` the validator still enforces the token contract,
+recipient, amount, and confirmation checks; it only drops the sender match.
+Attribution is then your responsibility — a human reviewer confirming identity
+and/or a single-use-`txHash` guard. `requireSender` defaults to `true`, so the
+connected flow gets the sender check for free; you must opt out explicitly. (A
+`requireSender: true` call with no `sender` is treated as a misconfiguration and
+rejected with `no_matching_transfer`, never accepted.)
+
 ## What it defends against
 
 | Attack | Defense |
 | --- | --- |
 | Spoofed/fake token emitting a `Transfer` | `log.address` must equal the canonical token contract |
-| Claiming a stranger's txHash | `Transfer.from` must equal the SIWE-bound `sender` |
+| Claiming a stranger's txHash | `Transfer.from` must equal the SIWE-bound `sender` (when `requireSender` is true — the connected flow; in the manual `requireSender: false` flow a human / single-use-txHash guard provides attribution instead) |
 | Underpayment | transfer `value >= expectedAmount` (BigInt, no floats) |
 | Reverted / gas-only tx | `receipt.status === "success"` |
 | Reorg after confirmation | `minConfirmations` threshold |

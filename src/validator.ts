@@ -27,7 +27,10 @@ export type EvaluateParams = {
   token: { address: `0x${string}` };
   receiveAddress: `0x${string}`;
   expectedAmount: bigint;
-  sender: `0x${string}`;
+  /** Required when `requireSender` is true; ignored otherwise. */
+  sender?: `0x${string}`;
+  /** Enforce `from === sender`. Default true at the createValidator layer. */
+  requireSender: boolean;
   minConfirmations: number;
   txHash: `0x${string}`;
 };
@@ -47,10 +50,16 @@ export function evaluateReceipt(params: EvaluateParams): ValidateResult {
   // A reverted tx moved no funds even though it occupies a block.
   if (receipt.status !== "success") return { ok: false, reason: "reverted" };
 
-  // Normalise the three addresses we compare against, once.
+  // Normalise the addresses we compare against, once.
   const tokenAddress = getAddress(params.token.address);
   const receiveAddress = getAddress(params.receiveAddress);
-  const sender = getAddress(params.sender);
+  // The required sender is only enforced when requireSender is set. A
+  // requireSender call with no sender is a programming error → reject safely.
+  let expectedSender: string | null = null;
+  if (params.requireSender) {
+    if (!params.sender) return { ok: false, reason: "no_matching_transfer" };
+    expectedSender = getAddress(params.sender);
+  }
 
   let matched: bigint | null = null;
   for (const log of receipt.logs) {
@@ -99,7 +108,7 @@ export function evaluateReceipt(params: EvaluateParams): ValidateResult {
       continue;
     }
     if (to !== receiveAddress) continue;
-    if (from !== sender) continue;
+    if (expectedSender !== null && from !== expectedSender) continue;
 
     // (e) must cover the price; `>=` lets an accidental overpay through.
     if (args.value < expectedAmount) continue;
@@ -214,6 +223,7 @@ export function createValidator(
       receiveAddress: cfg.receiveAddress,
       expectedAmount: input.expectedAmount,
       sender: input.sender,
+      requireSender: input.requireSender ?? true,
       minConfirmations: cfg.minConfirmations,
       txHash: input.txHash,
     });
