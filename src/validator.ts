@@ -98,7 +98,7 @@ export function evaluateReceipt(params: EvaluateParams): ValidateResult {
     };
     if (!args.from || !args.to || typeof args.value !== "bigint") continue;
 
-    // (c) recipient must be us, (d) sender must be the SIWE-bound wallet.
+    // (c) recipient must be us, (d) sender must match (when requireSender).
     let from: string;
     let to: string;
     try {

@@ -1,13 +1,17 @@
 # @qubitquant/crypto-pay
 
-Trustless on-chain **ERC-20 payment validation** (USDT / USDC) and **SIWE wallet
-binding** for accepting crypto with no payment processor and no custody. Funds
-move wallet-to-wallet directly to your address; this library just **verifies a
-transfer from its on-chain receipt**.
+Trustless on-chain **stablecoin payment validation** for accepting crypto with no
+payment processor and no custody. Funds move wallet-to-wallet directly to your
+address; this library just **verifies a transfer from its on-chain receipt**.
 
-It is a pure, framework-agnostic core: it reads the chain (via your RPC) and
-returns a verdict. It has **no** database, no secrets, no HTTP, and no opinion
-about how you store payments — that side-effect layer is yours.
+- **EVM (ERC-20)** — USDT / USDC on any EVM chain, via `viem`.
+- **Tron (TRC-20)** — via the TronGrid HTTP API, on the `@qubitquant/crypto-pay/tron`
+  subpath. TRC-20 emits the identical `Transfer` event as ERC-20, so both rails
+  share one pure decision core (`evaluateReceipt`).
+
+It is a pure, framework-agnostic core: it reads the chain and returns a verdict.
+It has **no** database, no secrets, no HTTP server, and no opinion about how you
+store payments — that side-effect layer is yours.
 
 ```bash
 pnpm add @qubitquant/crypto-pay viem
@@ -15,7 +19,7 @@ pnpm add @qubitquant/crypto-pay viem
 
 `viem` is a peer dependency.
 
-## Validate a payment
+## Validate an EVM payment
 
 ```ts
 import { createValidator, toSmallestUnit } from "@qubitquant/crypto-pay";
@@ -32,9 +36,7 @@ const validator = createValidator({
 const result = await validator.validatePayment({
   txHash: "0x…",
   expectedAmount: toSmallestUnit("49", 6), // 49 USDT
-  sender: "0xWalletTheUserProvedTheyOwn",  // from SIWE — see below
-  // requireSender defaults to true; pass false for a manual, human-reviewed
-  // flow where the sender isn't proven (see "Manual payments" below).
+  requireSender: false, // manual / human-reviewed flow — see below
 });
 
 if (result.ok) {
@@ -51,43 +53,44 @@ if (result.ok) {
 > block explorer before deploying. Token decimals are per-chain (USDT/USDC are 6
 > on most chains, **18 on BSC**).
 
-## Bind a wallet with SIWE
-
-To stop someone claiming a stranger's transaction, require the payer to prove
-they control the sending wallet (Sign-In With Ethereum), then pass that wallet
-as `sender` above.
+## Validate a Tron (TRC-20) payment
 
 ```ts
-import { generateSiweNonce, verifySiwe } from "@qubitquant/crypto-pay";
+import { createTronValidator } from "@qubitquant/crypto-pay/tron";
+import { toSmallestUnit } from "@qubitquant/crypto-pay";
 
-// 1. server: mint a single-use nonce, store it against the user, send to client.
-const nonce = generateSiweNonce();
-
-// 2. client: createSiweMessage(...) then wallet.signMessage(...).
-
-// 3. server: verify the returned message + signature.
-const ok = await verifySiwe({
-  message, signature, address,
-  domain: "yourhost.com", nonce, chainId: arbitrum.id,
+const validator = createTronValidator({
+  apiUrls: ["https://api.trongrid.io"],
+  apiKey: process.env.TRON_PRO_API_KEY, // optional, for rate limits
+  token: { addressBase58: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", decimals: 6, symbol: "USDT" },
+  receiveAddressBase58: "TYourReceivingWallet…",
+  minConfirmations: 1, // reads the solidity node — a hit is already irreversible
 });
-// ok === true → bind `address` to the user, consume the nonce.
+
+const result = await validator.validatePayment({
+  txHash: "<64-hex tron txid>", // 0x prefix optional
+  expectedAmount: toSmallestUnit("49", 6),
+  requireSender: false,
+});
 ```
 
-SIWE here is EOA-only (MetaMask). Smart-contract wallets (ERC-1271/6492) are out
-of scope.
+Same `Validator` interface and `ValidateResult` as the EVM path. It reads the
+**solidity node** (`/walletsolidity/*`), which only surfaces a transaction once
+its block is irreversible, so finality is built in. Node-only (uses `fetch`).
 
-## Manual (human-reviewed) payments
+## Sender pinning (optional)
 
-The connected flow above binds the payer's wallet with SIWE and passes it as
-`sender`. For a manual flow — the user pays from any wallet or exchange and just
-pastes the tx hash — there is no proven sender. Set `requireSender: false` and
-omit `sender`:
+By default `requireSender: true` enforces `Transfer.from === sender` — useful if
+you can prove which wallet the payer controls (e.g. a signed message), so a
+stranger can't claim someone else's txHash. For a **manual flow** — the user pays
+from any wallet or exchange and pastes the tx hash — there is no proven sender, so
+set `requireSender: false` and omit `sender`:
 
 ```ts
 const result = await validator.validatePayment({
   txHash: "0x…",
   expectedAmount: toSmallestUnit("49", 6),
-  requireSender: false, // skip the from === sender check
+  requireSender: false,
 });
 // result.ok === true means: this tx paid us >= price, on the right token,
 // to the right address, with enough confirmations — but NOT who sent it.
@@ -96,22 +99,19 @@ const result = await validator.validatePayment({
 With `requireSender: false` the validator still enforces the token contract,
 recipient, amount, and confirmation checks; it only drops the sender match.
 Attribution is then your responsibility — a human reviewer confirming identity
-and/or a single-use-`txHash` guard. `requireSender` defaults to `true`, so the
-connected flow gets the sender check for free; you must opt out explicitly. (A
-`requireSender: true` call with no `sender` is treated as a misconfiguration and
-rejected with `no_matching_transfer`, never accepted.)
+and/or a single-use-`txHash` guard. (A `requireSender: true` call with no
+`sender` is treated as a misconfiguration and rejected, never accepted.)
 
 ## What it defends against
 
 | Attack | Defense |
 | --- | --- |
 | Spoofed/fake token emitting a `Transfer` | `log.address` must equal the canonical token contract |
-| Claiming a stranger's txHash | `Transfer.from` must equal the SIWE-bound `sender` (when `requireSender` is true — the connected flow; in the manual `requireSender: false` flow a human / single-use-txHash guard provides attribution instead) |
+| Claiming a stranger's txHash | `Transfer.from` must equal `sender` (when `requireSender` is true); in a manual `requireSender: false` flow, a human / single-use-txHash guard provides attribution instead |
 | Underpayment | transfer `value >= expectedAmount` (BigInt, no floats) |
-| Reverted / gas-only tx | `receipt.status === "success"` |
-| Reorg after confirmation | `minConfirmations` threshold |
-| RPC pointed at the wrong network | one-time `chainId` self-check |
-| Cross-site SIWE replay | message `domain` / `nonce` / `chainId` must match |
+| Reverted / gas-only tx | `receipt.status === "success"` (EVM) / `receipt.result === "SUCCESS"` (Tron) |
+| Reorg / non-final tx | EVM: `minConfirmations` threshold; Tron: the solidity node only returns irreversible txs |
+| RPC pointed at the wrong network | EVM: one-time `chainId` self-check |
 
 **Replay across two payments** (reusing one valid txHash twice) is *not* handled
 here — that is stateful. Record consumed `txHash`es in your own store and reject
@@ -119,14 +119,16 @@ duplicates before crediting.
 
 ## API
 
-- `createValidator(config, reader?)` → `{ validatePayment }`. `reader` is an
+- `createValidator(config, reader?)` → `{ validatePayment }` (EVM). `reader` is an
   optional injected chain-reading stub for tests.
-- `evaluateReceipt(params)` — the pure, no-I/O decision core. Hand it a receipt
-  and head block; get a verdict. This is where every security check lives.
-- `verifySiwe(params)` — verify an EIP-4361 message + signature for an EOA.
+- `createTronValidator(config, reader?)` (from `@qubitquant/crypto-pay/tron`) — the
+  Tron counterpart, same interface.
+- `evaluateReceipt(params)` — the pure, no-I/O decision core shared by both rails.
+  Hand it a normalised receipt and head block; get a verdict. Every security check
+  lives here.
+- `tronBase58ToEvmAddress` / `evmAddressToTronBase58` / `isTronTxId` /
+  `normalizeTronTxId` (from `/tron`) — Tron address + tx-id helpers.
 - `toSmallestUnit` / `fromSmallestUnit` — decimal-safe amount helpers.
-- `createSiweMessage` / `generateSiweNonce` / `parseSiweMessage` — re-exported
-  from `viem/siwe` for convenience.
 
 ## License
 

@@ -38,17 +38,16 @@ export type ValidateInput = {
    */
   expectedAmount: bigint;
   /**
-   * The wallet the user proved they own (via SIWE). When `requireSender` is
-   * true (the default), the transfer's `from` must equal this — that's what
-   * stops someone claiming a stranger's txHash. Omit only with
-   * `requireSender: false`.
+   * The wallet the payer is known to control. When `requireSender` is true (the
+   * default), the transfer's `from` must equal this — that's what stops someone
+   * claiming a stranger's txHash. Omit only with `requireSender: false`.
    */
   sender?: `0x${string}`;
   /**
-   * Whether to enforce `from === sender`. Default `true` (the connected/SIWE
-   * flow). Set `false` for a manual, human-reviewed flow where the sender
-   * isn't proven — the result then only confirms "this tx paid us >= price",
-   * and a human / single-use-txHash guard provides attribution.
+   * Whether to enforce `from === sender`. Default `true`. Set `false` for a
+   * manual, human-reviewed flow where the sender isn't proven — the result then
+   * only confirms "this tx paid us >= price", and a human / single-use-txHash
+   * guard provides attribution.
    */
   requireSender?: boolean;
 };

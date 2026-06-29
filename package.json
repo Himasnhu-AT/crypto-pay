@@ -1,7 +1,7 @@
 {
   "name": "@qubitquant/crypto-pay",
   "version": "0.1.0",
-  "description": "Trustless on-chain ERC-20 (USDT/USDC) payment validation + SIWE wallet binding. No custody, no processor — verify a transfer straight from its receipt.",
+  "description": "Trustless on-chain stablecoin payment validation — ERC-20 (USDT/USDC, viem) and TRC-20 (Tron, TronGrid). No custody, no processor — verify a transfer straight from its receipt.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -11,6 +11,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./tron": {
+      "types": "./dist/tron/index.d.ts",
+      "import": "./dist/tron/index.js"
     }
   },
   "files": [
