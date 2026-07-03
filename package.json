@@ -15,6 +15,10 @@
     "./tron": {
       "types": "./dist/tron/index.d.ts",
       "import": "./dist/tron/index.js"
+    },
+    "./solana": {
+      "types": "./dist/solana/index.d.ts",
+      "import": "./dist/solana/index.js"
     }
   },
   "files": [
