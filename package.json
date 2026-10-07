@@ -52,7 +52,7 @@
     "tsup": "^8.5.0",
     "typescript": "^5",
     "viem": "^2.21.0",
-    "vitest": "^3.2.0"
+    "vitest": "^4.1.11"
   },
   "publishConfig": {
     "access": "public"
